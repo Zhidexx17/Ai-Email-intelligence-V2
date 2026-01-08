@@ -11,6 +11,15 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 if API_KEY:
     genai.configure(api_key=API_KEY)
 
+# DAFTAR PRIORITAS MODEL (Berdasarkan screenshot kamu)
+# Bot akan mencoba urutan dari atas ke bawah
+MODELS_TO_TRY = [
+    "gemini-2.5-flash",       # 1. Paling Pas (Limit 20/hari)
+    "gemini-2.5-flash-lite",  # 2. Cadangan Ringan (Biasanya lebih hemat)
+    "gemini-3-flash",         # 3. Cadangan Canggih
+    "gemma-3-27b-it"          # 4. Cadangan Open Source (Jika ada)
+]
+
 def ask_ai_json(sender, subject, body_text):
     """
     Versi INTEGRASI DATABASE (JSON OUTPUT)
@@ -56,29 +65,39 @@ def ask_ai_json(sender, subject, body_text):
     }}
     """
 
-    try:
-    
-        model = genai.GenerativeModel('gemini-2.5-flash-lite')
-        
-        # Request JSON Mode
-        response = model.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json"} 
-        )
-        
-        # Bersihkan hasil jika ada markdown ```json
-        clean_text = response.text.replace("```json", "").replace("```", "").strip()
-        
-        parsed_json = json.loads(clean_text)
-        return parsed_json
+    # --- LOOPING COBA MODEL ---
+    for model_name in MODELS_TO_TRY:
+        try:
+            # print(f"   🤖 Mencoba model: {model_name}...") 
+            # (Print dimatikan biar gak spam, nyalakan kalau mau debug)
+            
+            model = genai.GenerativeModel(model_name)
+            
+            response = model.generate_content(
+                prompt,
+                generation_config={"response_mime_type": "application/json"} 
+            )
+            
+            # Jika berhasil sampai sini, berarti tidak error
+            clean_text = response.text.replace("```json", "").replace("```", "").strip()
+            return json.loads(clean_text)
 
-    except Exception as e:
-        print(f"❌ Error AI: {e}")
-        # Return fallback biar gak crash
-        return {
-            "category": "ERROR",
-            "deadline_date": None,
-            "priority_score": 0,
-            "summary_text": "Gagal memproses AI",
-            "action_items": []
-        }
+        except Exception as e:
+            # Jika Error 429 (Limit Habis) atau lainnya, lanjut ke model berikutnya
+            if "429" in str(e):
+                print(f"   ⚠️ Kuota {model_name} HABIS! Mengalihkan ke cadangan...")
+            else:
+                print(f"   ⚠️ {model_name} Error: {e}. Mencoba cadangan...")
+            
+            # Lanjut ke iterasi loop berikutnya (Model selanjutnya)
+            continue
+
+    # --- JIKA SEMUA MODEL GAGAL ---
+    print("❌ SEMUA MODEL GAGAL MERESPON.")
+    return {
+        "category": "ERROR",
+        "deadline_date": None,
+        "priority_score": 0,
+        "summary_text": "Gagal memproses AI (Semua kuota habis)",
+        "action_items": []
+    }

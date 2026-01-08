@@ -1,0 +1,6 @@
+imap-tools
+supabase
+google-generativeai
+python-dotenv
+beautifulsoup4
+line-bot-sdk

@@ -1,0 +1,58 @@
+name: Bot Email Harian (UMN)
+
+on:
+  # 1. Jadwal Otomatis
+  schedule:
+    # Cron UTC: Jam 23:00 UTC = Jam 06:00 WIB (Besoknya)
+    # Format: Menit Jam HariBulan Bulan HariMinggu
+    - cron: '0 23 * * *'
+
+  # 2. Tombol Manual (Buat ngetes kalau gak sabar nunggu pagi)
+  workflow_dispatch:
+
+jobs:
+  run-daily-bot:
+    runs-on: ubuntu-latest
+    
+    # Setting Environment Variable (Ambil dari GitHub Secrets)
+    env:
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+      LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+
+    steps:
+      # A. Ambil kode dari repository
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # B. Siapkan Python
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # C. Install Library (Sesuai requirements.txt)
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      # D. STEP 1: Ambil Email (Ingest)
+      - name: 1. Run Ingest (Ambil Email)
+        run: python ingest.py
+
+      # E. STEP 2: Analisa AI (Process)
+      # Kita kasih jeda 10 detik antar script biar database nafas dulu
+      - name: 2. Run Process (AI Analysis)
+        run: |
+          sleep 5
+          python process.py
+
+      # F. STEP 3: Kirim Notifikasi (Notify)
+      - name: 3. Run Notify (Lapor ke LINE)
+        run: |
+          sleep 5
+          python notify.py

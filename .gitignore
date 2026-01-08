@@ -1,0 +1,23 @@
+# --- 1. Security ---
+.env
+
+# --- 2. VIRTUAL ENVIRONMENT ---
+venv/
+env/
+.venv/
+
+# --- 3. PYTHON CACHE ---
+__pycache__/
+*.py[cod]
+
+# --- 4. DATA LOKAL ---
+*.csv
+*.json
+*.log
+emails_rows.csv
+
+# --- 5. OS & IDE JUNK ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

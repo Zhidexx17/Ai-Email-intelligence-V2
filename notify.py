@@ -12,7 +12,7 @@ from linebot.exceptions import LineBotApiError
 # --- KONFIGURASI TESTING ---
 # Ubah ke True jika ingin memaksa kirim Rekap Benefit/Task SEKARANG (walau bukan tanggal 5/10/15)
 # Jangan lupa ubah ke False lagi nanti saat deploy!
-FORCE_RECAP = True 
+FORCE_RECAP = False 
 
 # 1. Load Environment
 load_dotenv()

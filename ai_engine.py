@@ -48,7 +48,7 @@ def ask_ai_json(sender, subject, body_text):
     2. DEADLINE: Cari tanggal tenggat waktu format YYYY-MM-DD. Jika tidak ada, null.
     
     3. RANGKUMAN (Summary):
-       - Bahasa Indonesia, ringkas, padat.
+       - Bahasa Indonesia, ringkas, singkat, padat.
        - Fokus: Apa untungnya buat mahasiswa? (SKKM/Honor/Sertifikat).
        - Sebutkan Syarat (Angkatan/Prodi) jika ada.
     

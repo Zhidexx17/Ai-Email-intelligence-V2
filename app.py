@@ -1,4 +1,6 @@
 import os
+import math
+from datetime import datetime, timedelta
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -6,25 +8,25 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
-# Load Env (Hanya untuk lokal, nanti di Render diset di dashboard)
+# Load Env (Hanya untuk lokal, di PythonAnywhere dibaca via WSGI)
 load_dotenv()
 
 app = Flask(__name__)
 
 # Kunci Rahasia
 LINE_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-LINE_SECRET = os.getenv("LINE_CHANNEL_SECRET") # <--- KITA BUTUH INI BARU
+LINE_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not all([LINE_TOKEN, LINE_SECRET, SUPABASE_URL, SUPABASE_KEY]):
-    print("⚠️ Warning: Environment variable belum lengkap.")
+    print("Warning: Environment variable")
 
 line_bot_api = LineBotApi(LINE_TOKEN)
 handler = WebhookHandler(LINE_SECRET)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 1. ROUTE WEBHOOK (Pintu Masuk LINE)
+# 1. ROUTE WEBHOOK
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -39,81 +41,92 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text.lower().strip()
-    reply_text = ""
-
-    # --- LOGIKA QUERY SUPABASE ---
+    
+    # --- LOGIKA KATEGORI ---
     category_filter = None
     title = ""
     
-    # 1. INFO SKKM & BENEFIT
+    # Keyword Mapping
     if user_msg in ["skkm", "benefit", "lomba", "beasiswa", "poin"]:
         category_filter = "BENEFIT"
         title = "🎁 INFO SKKM & BENEFIT"
-
-    # 2. TUGAS & DEADLINE
     elif user_msg in ["tugas", "deadline", "pr", "task", "ujian"]:
         category_filter = "TASK"
         title = "📌 DAFTAR TUGAS & UJIAN"
-
-    # 3. INFO URGENT (Wajib Lapor/Hadir)
     elif user_msg in ["urgent", "penting", "darurat", "batal"]:
         category_filter = "URGENT"
         title = "🚨 INFO URGENT/PENTING"
-
-    # 4. BERITA UMUM (Update Baru Disini!) 
-    # Menangkap kata "info", "berita", "pengumuman", "kabar"
-    # Mengambil kategori 'NOISE' (Berita Kampus/Umum)
     elif user_msg in ["info", "berita", "news", "kabar", "pengumuman"]:
         category_filter = "NOISE" 
-        title = "📰 BERITA & PENGUMUMAN KAMPUS"
-
-    # 5. MENU BANTUAN
+        title = "📰 BERITA & PENGUMUMAN"
     elif user_msg == "help":
-        reply_text = (
+        help_text = (
             "🤖 **Menu Bot UMN**\n\n"
             "Ketik kata kunci ini:\n"
-            "- 'skkm'   : Cari info poin, lomba, beasiswa\n"
-            "- 'tugas'  : Cek tugas & deadline\n"
-            "- 'urgent' : Cek perubahan jadwal/info darurat\n"
-            "- 'info'   : Cek berita kampus & pengumuman umum"
+            "- 'skkm'   : Info poin & lomba (2 minggu terakhir)\n"
+            "- 'tugas'  : Deadline tugas (2 minggu terakhir)\n"
+            "- 'urgent' : Info darurat\n"
+            "- 'info'   : Berita kampus"
         )
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=help_text))
         return
 
-    # EKSEKUSI DATABASE
+    # --- EKSEKUSI DATABASE ---
     if category_filter:
-        # Ambil 5 email terbaru dari kategori tersebut
-        data = supabase.table("emails") \
+        # 1. Hitung Tanggal 14 Hari Lalu
+        two_weeks_ago = (datetime.now() - timedelta(days=14)).isoformat()
+        
+        # 2. Query dengan Filter Waktu & Limit lebih besar (15)
+        response = supabase.table("emails") \
             .select("*") \
             .eq("category", category_filter) \
+            .gte("received_at", two_weeks_ago) \
             .order("received_at", desc=True) \
-            .limit(5) \
-            .execute().data
+            .limit(15) \
+            .execute()
+        
+        data = response.data
         
         if data:
-            reply_text = f"{title}\n----------------\n"
-            for i, email in enumerate(data, 1):
-                # Judul
-                reply_text += f"{i}. {email['subject'][:50]}...\n"
-                # Summary
-                reply_text += f"   📝 {email.get('summary_text', 'Cek email')}\n"
-                # Tanggal (Jika ada deadline/acara)
-                if email.get('deadline_date'):
-                    reply_text += f"   📅 Tgl: {email['deadline_date']}\n"
-                reply_text += "\n"
+            # --- LOGIKA BATCHING (Pecah Pesan) ---
+            # LINE reply token bisa kirim max 5 balon chat sekaligus.
+            # Kita akan pecah: 1 balon chat isi max 5 email.
+            messages_to_send = []
+            BATCH_SIZE = 5
             
-            # Footer manis
-            reply_text += "Ketik 'help' untuk menu lain."
+            # Loop per pecahan 5 data
+            for i in range(0, len(data), BATCH_SIZE):
+                batch = data[i : i + BATCH_SIZE]
+                current_part = (i // BATCH_SIZE) + 1
+                total_parts = math.ceil(len(data) / BATCH_SIZE)
+                
+                # Header per balon
+                reply_text = f"{title} (Part {current_part}/{total_parts})\n"
+                reply_text += "----------------\n"
+                
+                for idx, email in enumerate(batch, 1):
+                    # Nomor urut global (misal 1, 2... lalu 6, 7...)
+                    real_idx = i + idx
+                    
+                    reply_text += f"{real_idx}. {email['subject'][:40]}...\n"
+                    reply_text += f"   📝 {email.get('summary_text', '-')}\n"
+                    if email.get('deadline_date'):
+                        reply_text += f"   📅 {email['deadline_date']}\n"
+                    reply_text += "\n"
+                
+                # Masukkan text yang sudah jadi ke daftar kirim
+                messages_to_send.append(TextSendMessage(text=reply_text))
+            
+            # Kirim semua balon chat sekaligus (Max 5 balon)
+            line_bot_api.reply_message(event.reply_token, messages_to_send)
+            
         else:
-            reply_text = f"📭 Belum ada email terbaru di kategori: {title}."
+            fallback_msg = f"📭 Tidak ada info {category_filter} dalam 14 hari terakhir."
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=fallback_msg))
     
     else:
-        # Default response jika tidak mengerti
-        reply_text = "Maaf, saya tidak mengerti. Ketik 'help' untuk melihat menu."
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="Maaf, ketik 'help' untuk menu."))
 
-    # Kirim Balasan
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
-
-# Jalankan Server (Hanya utk lokal)
+# Jalankan Server
 if __name__ == "__main__":
-    app.run(port=5000)
+    app.run()

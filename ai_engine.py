@@ -3,21 +3,19 @@ import json
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-# Load Environment
 load_dotenv()
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Konfigurasi Gemini (Pakai Library Stabil)
 if API_KEY:
     genai.configure(api_key=API_KEY)
 
 # DAFTAR PRIORITAS MODEL (Berdasarkan screenshot kamu)
 # Bot akan mencoba urutan dari atas ke bawah
 MODELS_TO_TRY = [
-    "gemini-2.5-flash",       # 1. Paling Pas (Limit 20/hari)
-    "gemini-2.5-flash-lite",  # 2. Cadangan Ringan (Biasanya lebih hemat)
-    "gemini-3-flash",         # 3. Cadangan Canggih
-    "gemma-3-27b-it"          # 4. Cadangan Open Source (Jika ada)
+    "gemini-2.5-flash",       
+    "gemini-2.5-flash-lite",  
+    "gemini-3-flash",         
+    "gemma-3-27b-it"          
 ]
 
 def ask_ai_json(sender, subject, body_text):
@@ -29,7 +27,6 @@ def ask_ai_json(sender, subject, body_text):
         print("❌ Error: GEMINI_API_KEY belum di-set di .env")
         return None
 
-    # Prompt yang sudah disesuaikan dengan keinginanmu tapi format JSON
     prompt = f"""
     Kamu adalah asisten mahasiswa UMN yang cerdas. Tugasmu mengekstrak informasi email.
     
@@ -69,7 +66,6 @@ def ask_ai_json(sender, subject, body_text):
     for model_name in MODELS_TO_TRY:
         try:
             # print(f"   🤖 Mencoba model: {model_name}...") 
-            # (Print dimatikan biar gak spam, nyalakan kalau mau debug)
             
             model = genai.GenerativeModel(model_name)
             
@@ -78,12 +74,11 @@ def ask_ai_json(sender, subject, body_text):
                 generation_config={"response_mime_type": "application/json"} 
             )
             
-            # Jika berhasil sampai sini, berarti tidak error
             clean_text = response.text.replace("```json", "").replace("```", "").strip()
             return json.loads(clean_text)
 
         except Exception as e:
-            # Jika Error 429 (Limit Habis) atau lainnya, lanjut ke model berikutnya
+            # Jika Error 429 lanjut ke model berikutnya
             if "429" in str(e):
                 print(f"   ⚠️ Kuota {model_name} HABIS! Mengalihkan ke cadangan...")
             else:

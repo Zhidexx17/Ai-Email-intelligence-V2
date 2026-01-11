@@ -8,7 +8,6 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
-# Load Env (Hanya untuk lokal, di PythonAnywhere dibaca via WSGI)
 load_dotenv()
 
 app = Flask(__name__)

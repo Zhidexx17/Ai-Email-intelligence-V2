@@ -10,8 +10,7 @@ from linebot.models import TextSendMessage
 from linebot.exceptions import LineBotApiError
 
 # --- KONFIGURASI TESTING ---
-# Ubah ke True jika ingin memaksa kirim Rekap Benefit/Task SEKARANG (walau bukan tanggal 5/10/15)
-# Jangan lupa ubah ke False lagi nanti saat deploy!
+# Change to True if you want to force sending Benefit/Task Recap NOW
 FORCE_RECAP = False 
 
 # 1. Load Environment
@@ -50,7 +49,7 @@ def send_batched_messages(email_list, title_prefix="REKAP"):
     BATCH_SIZE = 5
     total_emails = len(email_list)
     total_batches = math.ceil(total_emails / BATCH_SIZE)
-    date_str = get_indo_date() # Ambil tanggal format Indo
+    date_str = get_indo_date()
 
     print(f"   📦 Mengirim {total_emails} email dalam {total_batches} batch...")
 
@@ -61,7 +60,6 @@ def send_batched_messages(email_list, title_prefix="REKAP"):
         batch = email_list[i : i + BATCH_SIZE]
         current_batch_num = (i // BATCH_SIZE) + 1
         
-        # --- REVISI HEADER ---
         # Menambahkan Tanggal di bawah Judul
         message_text = f"📢 **{title_prefix} (Bagian {current_batch_num}/{total_batches})**\n"
         message_text += f"🗓️ {date_str}\n\n"
@@ -84,7 +82,7 @@ def send_batched_messages(email_list, title_prefix="REKAP"):
             message_text += f"   📝 {email.get('summary_text', '-')}\n"
             message_text += f"   👉 **Saran:** {saran_text}\n\n"
             
-            # Susun Pesan Terakhir
+            # Pesan Terakhir
             final_summary_msg += f"{real_number}. {email['subject'][:50]}\n"
             if email.get('deadline_date'):
                 final_summary_msg += f"   📅 Deadline: {email['deadline_date']}\n"
@@ -101,7 +99,7 @@ def send_batched_messages(email_list, title_prefix="REKAP"):
 
     # Kirim Pesan Terakhir
     try:
-        final_summary_msg += "\nSemangat Rafly! 🔥"
+        final_summary_msg += "\n---------------------------- 🔥"
         line_bot_api.push_message(LINE_USER_ID, TextSendMessage(text=final_summary_msg))
         print("   ✅ Pesan Ringkasan Akhir terkirim.")
     except LineBotApiError as e:

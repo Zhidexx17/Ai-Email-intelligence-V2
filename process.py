@@ -72,7 +72,6 @@ def process_pending_emails():
             
         # --- PENTING: JEDA DIPERLAMBAT ---
         # Limit Google: 5 Request / Menit = 1 request tiap 12 detik.
-        # Kita set 20 detik biar aman banget.
         print("   ⏳ Cooling down 20 detik...")
         time.sleep(20)
 
